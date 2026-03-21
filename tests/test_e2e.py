@@ -8,6 +8,7 @@ Run:
 
 Or via GitHub Actions (CI spins up Flask automatically).
 """
+import re
 import pytest
 from playwright.sync_api import Page, expect
 
@@ -138,21 +139,21 @@ def test_sun_icon_visible_in_dark_mode(page: Page, base_url: str) -> None:
 def test_help_modal_opens_on_click(page: Page, base_url: str) -> None:
     page.goto(base_url)
     page.click("#help-btn")
-    expect(page.locator("#help-modal")).to_have_class("open")
+    expect(page.locator("#help-modal")).to_have_class(re.compile(r"\bopen\b"))
 
 
 def test_help_modal_closes_on_x_button(page: Page, base_url: str) -> None:
     page.goto(base_url)
     page.click("#help-btn")
     page.click(".modal-close")
-    expect(page.locator("#help-modal")).not_to_have_class("open")
+    expect(page.locator("#help-modal")).not_to_have_class(re.compile(r"\bopen\b"))
 
 
 def test_help_modal_closes_on_escape(page: Page, base_url: str) -> None:
     page.goto(base_url)
     page.click("#help-btn")
     page.keyboard.press("Escape")
-    expect(page.locator("#help-modal")).not_to_have_class("open")
+    expect(page.locator("#help-modal")).not_to_have_class(re.compile(r"\bopen\b"))
 
 
 def test_help_modal_closes_on_overlay_click(page: Page, base_url: str) -> None:
@@ -160,7 +161,7 @@ def test_help_modal_closes_on_overlay_click(page: Page, base_url: str) -> None:
     page.click("#help-btn")
     # Click the overlay (the modal backdrop) — far corner
     page.click("#help-modal", position={"x": 10, "y": 10})
-    expect(page.locator("#help-modal")).not_to_have_class("open")
+    expect(page.locator("#help-modal")).not_to_have_class(re.compile(r"\bopen\b"))
 
 
 def test_help_modal_contains_indicator_sections(page: Page, base_url: str) -> None:
@@ -184,9 +185,10 @@ def test_help_modal_contains_scoring_table(page: Page, base_url: str) -> None:
 def test_period_button_becomes_active_on_click(page: Page, base_url: str) -> None:
     page.goto(base_url)
     page.click('.period-btn[data-period="1M"]')
-    expect(page.locator('.period-btn[data-period="1M"]')).to_have_class("active")
+    # to_have_class matches the full class string — use regex to check for substring
+    expect(page.locator('.period-btn[data-period="1M"]')).to_have_class(re.compile(r"\bactive\b"))
     # Previous active (6M) should no longer be active
-    expect(page.locator('.period-btn[data-period="6M"]')).not_to_have_class("active")
+    expect(page.locator('.period-btn[data-period="6M"]')).not_to_have_class(re.compile(r"\bactive\b"))
 
 
 def test_chart_title_updates_on_period_change(page: Page, base_url: str) -> None:
