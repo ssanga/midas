@@ -245,3 +245,86 @@ def test_refresh_button_reloads_data(page: Page, base_url: str) -> None:
         timeout=TIMEOUT_DATA,
     )
     expect(page.locator("#current-price")).not_to_have_class("skeleton")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Asset selector
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_asset_buttons_present(page: Page, base_url: str) -> None:
+    page.goto(base_url)
+    for asset in ("GC=F", "BTC-USD", "^GSPC"):
+        btn = page.locator(f'.asset-btn[data-asset="{asset}"]')
+        expect(btn).to_be_visible()
+
+
+def test_default_active_asset_is_gold(page: Page, base_url: str) -> None:
+    page.goto(base_url)
+    active_btn = page.locator(".asset-btn.active")
+    expect(active_btn).to_have_attribute("data-asset", "GC=F")
+
+
+def test_asset_switch_changes_active_button(page: Page, base_url: str) -> None:
+    page.goto(base_url)
+    page.click('.asset-btn[data-asset="BTC-USD"]')
+    expect(page.locator('.asset-btn[data-asset="BTC-USD"]')).to_have_class(re.compile(r"\bactive\b"))
+    expect(page.locator('.asset-btn[data-asset="GC=F"]')).not_to_have_class(re.compile(r"\bactive\b"))
+
+
+def test_asset_switch_updates_header_title(page: Page, base_url: str) -> None:
+    page.goto(base_url)
+    page.click('.asset-btn[data-asset="BTC-USD"]')
+    expect(page.locator("#header-title")).to_contain_text("Bitcoin")
+
+
+def test_asset_switch_updates_ticker_badge(page: Page, base_url: str) -> None:
+    page.goto(base_url)
+    page.click('.asset-btn[data-asset="BTC-USD"]')
+    expect(page.locator("#ticker-badge")).to_contain_text("BTC-USD")
+
+
+def test_asset_switch_updates_url(page: Page, base_url: str) -> None:
+    page.goto(base_url)
+    page.click('.asset-btn[data-asset="BTC-USD"]')
+    expect(page).to_have_url(re.compile(r"asset=BTC-USD"))
+
+
+def test_gspc_asset_switch_updates_url(page: Page, base_url: str) -> None:
+    page.goto(base_url)
+    page.click('.asset-btn[data-asset="^GSPC"]')
+    # ^GSPC encodes to %5EGSPC in URL
+    expect(page).to_have_url(re.compile(r"asset=%5EGSPC", re.IGNORECASE))
+
+
+def test_url_asset_param_sets_active_button(page: Page, base_url: str) -> None:
+    page.goto(f"{base_url}?asset=BTC-USD")
+    expect(page.locator('.asset-btn[data-asset="BTC-USD"]')).to_have_class(re.compile(r"\bactive\b"))
+    expect(page.locator('.asset-btn[data-asset="GC=F"]')).not_to_have_class(re.compile(r"\bactive\b"))
+
+
+def test_no_page_reload_on_asset_switch(page: Page, base_url: str) -> None:
+    page.goto(base_url)
+    # Track navigations — a full reload would trigger a framenavigated event for the main URL
+    navigations: list[str] = []
+    page.on("framenavigated", lambda frame: navigations.append(frame.url) if frame == page.main_frame else None)
+    page.click('.asset-btn[data-asset="BTC-USD"]')
+    page.wait_for_timeout(500)
+    # No full navigation should have occurred (pushState keeps the same frame)
+    assert not any("BTC-USD" in url and url.startswith("http") for url in navigations), \
+        "Asset switch should not trigger a full page navigation"
+
+
+@pytest.mark.slow
+def test_btc_price_loads_with_dollar_sign(page: Page, base_url: str) -> None:
+    page.goto(f"{base_url}?asset=BTC-USD")
+    wait_for_data(page)
+    price_text = page.locator("#current-price").inner_text()
+    assert "$" in price_text
+
+
+@pytest.mark.slow
+def test_gspc_label_shows_pts_unit(page: Page, base_url: str) -> None:
+    page.goto(f"{base_url}?asset=%5EGSPC")
+    wait_for_data(page)
+    label_text = page.locator("#asset-label-unit").inner_text()
+    assert "pts" in label_text.lower() or "500" in label_text

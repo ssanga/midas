@@ -27,11 +27,11 @@ def safe(val, decimals=2):
 # Data fetching & indicator calculation
 # ─────────────────────────────────────────────────────────────────────────────
 
-def fetch_data() -> pd.DataFrame:
-    """Download GC=F OHLCV data (~6 months) and attach all indicators."""
-    df = yf.download("GC=F", period="6mo", progress=False, auto_adjust=True)
+def fetch_data(ticker: str = "GC=F") -> pd.DataFrame:
+    """Download OHLCV data (~6 months) for the given ticker and attach all indicators."""
+    df = yf.download(ticker, period="6mo", progress=False, auto_adjust=True)
     if df.empty:
-        raise RuntimeError("Yahoo Finance returned empty data for GC=F.")
+        raise RuntimeError(f"Yahoo Finance returned empty data for {ticker}.")
 
     # Flatten MultiIndex columns produced by newer yfinance versions
     # e.g. ('Close', 'GC=F') → 'Close'
@@ -170,8 +170,12 @@ def index():
 
 @app.route("/api/data")
 def api_data():
+    ticker = request.args.get("asset", "GC=F").upper()
+    if ticker not in ASSETS:
+        return jsonify({"error": f"Activo no soportado: {ticker}"}), 400
+
     try:
-        df = fetch_data()
+        df = fetch_data(ticker)
 
         latest      = df.iloc[-1]
         prev_close  = float(df.iloc[-2]["Close"]) if len(df) >= 2 else float(latest["Close"])
@@ -209,6 +213,8 @@ def api_data():
                 "sma20":  sma20,
                 "sma50":  sma50,
             },
+            "ticker":       ticker,
+            "unit":         ASSETS[ticker]["unit"],
             "score":        score,
             "final_signal": final_signal,
             "indicators":   indicators,
@@ -234,15 +240,25 @@ _PERIOD_MAP = {
     "MAX": ("max", "1mo", False),
 }
 
+ASSETS = {
+    "GC=F":    {"label": "Oro",     "unit": "USD/oz"},
+    "BTC-USD": {"label": "Bitcoin", "unit": "USD"},
+    "^GSPC":   {"label": "S&P 500", "unit": "pts"},
+}
+
 
 @app.route("/api/chart")
 def api_chart():
     period = request.args.get("period", "6M").upper()
+    ticker = request.args.get("asset", "GC=F").upper()
+    if ticker not in ASSETS:
+        return jsonify({"error": f"Activo no soportado: {ticker}"}), 400
+
     yf_period, interval, intraday = _PERIOD_MAP.get(period, ("6mo", "1d", False))
 
     try:
         df = yf.download(
-            "GC=F", period=yf_period, interval=interval,
+            ticker, period=yf_period, interval=interval,
             progress=False, auto_adjust=True,
         )
         if df.empty:

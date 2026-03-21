@@ -280,7 +280,7 @@ class TestApiData:
 
         for key in ("current_price", "day_change", "day_change_pct",
                     "metrics", "chart", "score", "final_signal",
-                    "indicators", "updated_at"):
+                    "indicators", "updated_at", "ticker", "unit"):
             assert key in data, f"Missing key: {key}"
 
     def test_api_data_metrics_keys(self, client):
@@ -369,3 +369,52 @@ class TestApiChart:
             res = client.get("/api/chart?period=BOGUS")
         # Should not crash — uses fallback
         assert res.status_code == 200
+
+
+class TestApiDataMultiAsset:
+
+    def test_btc_returns_correct_ticker_and_unit(self, client):
+        with patch("app.fetch_data", return_value=make_mock_df()):
+            data = client.get("/api/data?asset=BTC-USD").get_json()
+        assert data["ticker"] == "BTC-USD"
+        assert data["unit"]   == "USD"
+
+    def test_gspc_returns_correct_ticker_and_unit(self, client):
+        with patch("app.fetch_data", return_value=make_mock_df()):
+            data = client.get("/api/data?asset=%5EGSPC").get_json()
+        assert data["ticker"] == "^GSPC"
+        assert data["unit"]   == "pts"
+
+    def test_default_asset_is_gcf(self, client):
+        with patch("app.fetch_data", return_value=make_mock_df()):
+            data = client.get("/api/data").get_json()
+        assert data["ticker"] == "GC=F"
+        assert data["unit"]   == "USD/oz"
+
+    def test_invalid_asset_returns_400(self, client):
+        res = client.get("/api/data?asset=INVALID")
+        assert res.status_code == 400
+        assert "error" in res.get_json()
+
+    def test_fetch_data_called_with_ticker(self, client):
+        with patch("app.fetch_data", return_value=make_mock_df()) as mock_fd:
+            client.get("/api/data?asset=BTC-USD")
+        mock_fd.assert_called_once_with("BTC-USD")
+
+
+class TestApiChartMultiAsset:
+
+    def test_asset_param_accepted(self, client):
+        with patch("app.yf.download", return_value=make_mock_df()):
+            res = client.get("/api/chart?period=6M&asset=BTC-USD")
+        assert res.status_code == 200
+
+    def test_invalid_asset_returns_400(self, client):
+        res = client.get("/api/chart?asset=INVALID")
+        assert res.status_code == 400
+        assert "error" in res.get_json()
+
+    def test_yf_download_called_with_ticker(self, client):
+        with patch("app.yf.download", return_value=make_mock_df()) as mock_dl:
+            client.get("/api/chart?period=6M&asset=BTC-USD")
+        assert mock_dl.call_args[0][0] == "BTC-USD"

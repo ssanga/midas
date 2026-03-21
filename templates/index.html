@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Análisis del Oro — GC=F</title>
+  <title id="page-title">Análisis del Oro — GC=F</title>
   <!-- Favicon: gold coin SVG data URI -->
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15' fill='%23f59e0b' stroke='%23b45309' stroke-width='1.5'/%3E%3Ccircle cx='16' cy='16' r='11' fill='none' stroke='%23fde68a' stroke-width='1' opacity='0.6'/%3E%3Ctext x='16' y='21' text-anchor='middle' font-family='Georgia%2Cserif' font-size='11' font-weight='bold' fill='%2378350f'%3EAu%3C/text%3E%3C/svg%3E">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
@@ -27,6 +27,7 @@
       --hold-bg:     #fef3c7;
       --accent:      #6366f1;
       --accent-muted:#818cf8;
+      --asset-accent:#f59e0b;
       --shadow:      0 1px 4px rgba(0,0,0,.08), 0 4px 12px rgba(0,0,0,.06);
       --overlay:     rgba(15,23,42,.45);
       --skeleton-a:  #e2e8f0;
@@ -50,6 +51,7 @@
       --hold-bg:     #78350f;
       --accent:      #818cf8;
       --accent-muted:#6366f1;
+      --asset-accent:#f59e0b;
       --shadow:      0 1px 4px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.25);
       --overlay:     rgba(0,0,0,.65);
       --skeleton-a:  #334155;
@@ -128,6 +130,23 @@
 
     .icon-btn:hover { background: var(--border); color: var(--text); }
     .icon-btn:active { transform: scale(.93); }
+
+    /* ── Asset selector ───────────────────────────────────────────────────── */
+    .asset-selector {
+      display: flex; gap: .3rem;
+      background: var(--bg-alt); border: 1px solid var(--border);
+      border-radius: 10px; padding: .2rem;
+    }
+
+    .asset-btn {
+      background: none; border: none; border-radius: 8px;
+      padding: .38rem .9rem; font-size: .82rem; font-weight: 600;
+      color: var(--muted); cursor: pointer; white-space: nowrap;
+      transition: background .15s, color .15s;
+    }
+
+    .asset-btn:hover:not(.active) { background: var(--card); color: var(--text); }
+    .asset-btn.active              { background: var(--asset-accent); color: #fff; }
 
     /* ── Refresh button ───────────────────────────────────────────────────── */
     #refresh-btn {
@@ -492,6 +511,7 @@
       .metrics-row       { grid-template-columns: 1fr; }
       .indicators-grid   { grid-template-columns: 1fr; }
       #current-price     { font-size: 2rem; }
+      .asset-selector    { order: 3; width: 100%; justify-content: center; }
     }
 
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -502,23 +522,25 @@
 <!-- ── Header ───────────────────────────────────────────────────────────── -->
 <header>
   <h1>
-    <!-- Gold bar icon -->
-    <svg width="30" height="22" viewBox="0 0 36 26" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <!-- right face (shadow) -->
-      <polygon points="28,9 34,4 34,20 28,25" fill="#b45309"/>
-      <!-- top face (highlight) -->
-      <polygon points="2,9 8,4 34,4 28,9" fill="#fde68a"/>
-      <!-- front face -->
-      <rect x="2" y="9" width="26" height="16" rx="1.5" fill="#f59e0b"/>
-      <!-- shine stripe -->
-      <rect x="6" y="13" width="16" height="2" rx="1" fill="#fef3c7" opacity="0.55"/>
-      <!-- Au label -->
-      <text x="15" y="21.5" text-anchor="middle" font-family="Georgia,serif"
-            font-size="7.5" font-weight="bold" fill="#78350f">Au</text>
-    </svg>
-    Análisis del Oro
-    <span class="ticker">GC=F · Yahoo Finance</span>
+    <span id="asset-icon" aria-hidden="true">
+      <!-- Gold bar icon (default) -->
+      <svg width="30" height="22" viewBox="0 0 36 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <polygon points="28,9 34,4 34,20 28,25" fill="#b45309"/>
+        <polygon points="2,9 8,4 34,4 28,9" fill="#fde68a"/>
+        <rect x="2" y="9" width="26" height="16" rx="1.5" fill="#f59e0b"/>
+        <rect x="6" y="13" width="16" height="2" rx="1" fill="#fef3c7" opacity="0.55"/>
+        <text x="15" y="21.5" text-anchor="middle" font-family="Georgia,serif"
+              font-size="7.5" font-weight="bold" fill="#78350f">Au</text>
+      </svg>
+    </span>
+    <span id="header-title">Análisis del Oro</span>
+    <span class="ticker" id="ticker-badge">GC=F · Yahoo Finance</span>
   </h1>
+  <nav class="asset-selector" aria-label="Selector de activo">
+    <button class="asset-btn active" data-asset="GC=F"    onclick="selectAsset('GC=F')">Oro</button>
+    <button class="asset-btn"        data-asset="BTC-USD"  onclick="selectAsset('BTC-USD')">Bitcoin</button>
+    <button class="asset-btn"        data-asset="^GSPC"    onclick="selectAsset('^GSPC')">S&amp;P 500</button>
+  </nav>
   <div class="header-right">
     <span id="updated-at">—</span>
 
@@ -575,7 +597,7 @@
   <!-- Price + Signal -->
   <div class="card price-signal-row">
     <div class="price-block">
-      <div class="price-label">Precio actual — Oro (USD/oz)</div>
+      <div class="price-label">Precio actual — <span id="asset-label-unit">Oro (USD/oz)</span></div>
       <div id="current-price" class="skeleton">$0,000.00</div>
       <span id="day-change" class="neutral skeleton">+0.00 (+0.00%)</span>
     </div>
@@ -766,6 +788,47 @@
 
 <!-- ── JavaScript ─────────────────────────────────────────────────────────── -->
 <script>
+  // ── Asset registry ────────────────────────────────────────────────────────
+
+  const ASSET_REGISTRY = {
+    'GC=F': {
+      label:     'Análisis del Oro',
+      unitLabel: 'Oro (USD/oz)',
+      unit:      'USD/oz',
+      accent:    '#f59e0b',
+      icon: `<svg width="30" height="22" viewBox="0 0 36 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <polygon points="28,9 34,4 34,20 28,25" fill="#b45309"/>
+        <polygon points="2,9 8,4 34,4 28,9" fill="#fde68a"/>
+        <rect x="2" y="9" width="26" height="16" rx="1.5" fill="#f59e0b"/>
+        <rect x="6" y="13" width="16" height="2" rx="1" fill="#fef3c7" opacity="0.55"/>
+        <text x="15" y="21.5" text-anchor="middle" font-family="Georgia,serif" font-size="7.5" font-weight="bold" fill="#78350f">Au</text>
+      </svg>`,
+    },
+    'BTC-USD': {
+      label:     'Análisis de Bitcoin',
+      unitLabel: 'Bitcoin (USD)',
+      unit:      'USD',
+      accent:    '#f97316',
+      icon: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="12" cy="12" r="11" fill="#f97316"/>
+        <text x="12" y="17" text-anchor="middle" font-family="Arial,sans-serif" font-size="13" font-weight="bold" fill="#fff">₿</text>
+      </svg>`,
+    },
+    '^GSPC': {
+      label:     'Análisis del S&amp;P 500',
+      unitLabel: 'S&amp;P 500 (pts)',
+      unit:      'pts',
+      accent:    '#6366f1',
+      icon: `<svg width="26" height="22" viewBox="0 0 26 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="1"  y="12" width="5" height="9"  rx="1" fill="#6366f1"/>
+        <rect x="8"  y="7"  width="5" height="14" rx="1" fill="#6366f1"/>
+        <rect x="15" y="3"  width="5" height="18" rx="1" fill="#6366f1"/>
+        <polyline points="3.5,12 10.5,7 17.5,3" stroke="#818cf8" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+      </svg>`,
+    },
+  };
+
+  let currentAsset = 'GC=F';
   let chart = null;
 
   // ── Theme ─────────────────────────────────────────────────────────────────
@@ -821,6 +884,11 @@
     return val.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
   }
 
+  function fmtPrice(val, asset) {
+    const unit = ASSET_REGISTRY[asset ?? currentAsset]?.unit ?? 'USD';
+    return (unit.startsWith('USD') ? '$' : '') + fmt(val, 2);
+  }
+
   function signalClass(signal) {
     return { COMPRAR: 'buy', VENDER: 'sell', MANTENER: 'hold' }[signal] ?? 'hold';
   }
@@ -834,7 +902,7 @@
     document.getElementById('error-bar').style.display = 'none';
 
     try {
-      const res  = await fetch('/api/data');
+      const res  = await fetch(`/api/data?asset=${encodeURIComponent(currentAsset)}`);
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || `HTTP ${res.status}`);
       render(data);
@@ -853,7 +921,7 @@
   function render(d) {
     // Price
     const priceEl = document.getElementById('current-price');
-    priceEl.textContent = `$${fmt(d.current_price, 2)}`;
+    priceEl.textContent = fmtPrice(d.current_price, currentAsset);
     priceEl.classList.remove('skeleton');
 
     // Day change
@@ -869,8 +937,8 @@
     banner.className = `signal-banner signal-${sig.toLowerCase()}`;
 
     // Metrics
-    document.getElementById('high-30d').textContent  = `$${fmt(d.metrics.high_30d)}`;
-    document.getElementById('low-30d').textContent   = `$${fmt(d.metrics.low_30d)}`;
+    document.getElementById('high-30d').textContent   = fmtPrice(d.metrics.high_30d, currentAsset);
+    document.getElementById('low-30d').textContent    = fmtPrice(d.metrics.low_30d, currentAsset);
     document.getElementById('volatility').textContent = `${fmt(d.metrics.volatility_ann, 2)}%`;
 
     // Chart comes from the selected period endpoint; on first load use default (6M)
@@ -909,7 +977,7 @@
   async function loadChartData(period) {
     document.getElementById('chart-title').textContent = 'Cargando…';
     try {
-      const res  = await fetch(`/api/chart?period=${period}`);
+      const res  = await fetch(`/api/chart?period=${period}&asset=${encodeURIComponent(currentAsset)}`);
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || `HTTP ${res.status}`);
       renderChart(data, data.intraday);
@@ -936,8 +1004,8 @@
           {
             label: 'Precio',
             data: c.prices,
-            borderColor: '#6366f1',
-            backgroundColor: 'rgba(99,102,241,0.07)',
+            borderColor: ASSET_REGISTRY[currentAsset].accent,
+            backgroundColor: ASSET_REGISTRY[currentAsset].accent + '12',
             borderWidth: 2, pointRadius: 0, fill: true, tension: 0.15, order: 0,
           },
           {
@@ -965,7 +1033,7 @@
           },
           tooltip: {
             callbacks: {
-              label: ctx => ctx.raw !== null ? `${ctx.dataset.label}: $${fmt(ctx.raw, 2)}` : null,
+              label: ctx => ctx.raw !== null ? `${ctx.dataset.label}: ${fmtPrice(ctx.raw, currentAsset)}` : null,
             },
           },
         },
@@ -976,7 +1044,7 @@
           },
           y: {
             grid: { color: grid },
-            ticks: { callback: v => `$${v.toLocaleString('en-US')}`, font: { size: 11 }, color: tick },
+            ticks: { callback: v => fmtPrice(v, currentAsset), font: { size: 11 }, color: tick },
           },
         },
       },
@@ -1002,15 +1070,15 @@
     });
     setCard('bollinger', {
       title: 'Bollinger (20, 2σ)',
-      value: ind.bollinger.lower !== null ? `$${fmt(ind.bollinger.lower)}` : '—',
-      sub:   `Inf: $${fmt(ind.bollinger.lower)} · Med: $${fmt(ind.bollinger.mid)} · Sup: $${fmt(ind.bollinger.upper)}`,
+      value: ind.bollinger.lower !== null ? fmtPrice(ind.bollinger.lower, currentAsset) : '—',
+      sub:   `Inf: ${fmtPrice(ind.bollinger.lower, currentAsset)} · Med: ${fmtPrice(ind.bollinger.mid, currentAsset)} · Sup: ${fmtPrice(ind.bollinger.upper, currentAsset)}`,
       text:  ind.bollinger.text,
       signal: ind.bollinger.signal,
     });
     setCard('sma', {
       title: 'SMA 20 / SMA 50',
-      value: ind.sma.sma20 !== null ? `$${fmt(ind.sma.sma20)}` : '—',
-      sub:   `SMA 50: ${ind.sma.sma50 !== null ? '$' + fmt(ind.sma.sma50) : '—'}`,
+      value: ind.sma.sma20 !== null ? fmtPrice(ind.sma.sma20, currentAsset) : '—',
+      sub:   `SMA 50: ${ind.sma.sma50 !== null ? fmtPrice(ind.sma.sma50, currentAsset) : '—'}`,
       text:  ind.sma.text,
       signal: ind.sma.signal,
     });
@@ -1029,10 +1097,79 @@
     `;
   }
 
+  // ── Asset selector ────────────────────────────────────────────────────────
+
+  async function selectAsset(ticker) {
+    if (ticker === currentAsset) return;
+    currentAsset = ticker;
+    const cfg = ASSET_REGISTRY[ticker];
+
+    // Update DOM
+    document.getElementById('asset-icon').innerHTML      = cfg.icon;
+    document.getElementById('header-title').textContent  = cfg.label;
+    document.getElementById('header-title').innerHTML    = cfg.label;
+    document.getElementById('ticker-badge').textContent  = ticker + ' · Yahoo Finance';
+    document.getElementById('asset-label-unit').innerHTML = cfg.unitLabel;
+    document.getElementById('page-title').textContent    = cfg.label + ' — ' + ticker;
+
+    // Accent colour
+    document.documentElement.style.setProperty('--asset-accent', cfg.accent);
+
+    // Active button
+    document.querySelectorAll('.asset-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.asset === ticker);
+    });
+
+    // Bookmarkable URL
+    history.pushState({ asset: ticker }, '', `?asset=${encodeURIComponent(ticker)}`);
+
+    await loadData();
+    await loadChartData(currentPeriod);
+  }
+
+  window.addEventListener('popstate', e => {
+    const ticker = e.state?.asset ?? 'GC=F';
+    if (ticker !== currentAsset) {
+      currentAsset = ticker;
+      const cfg = ASSET_REGISTRY[ticker] ?? ASSET_REGISTRY['GC=F'];
+      document.getElementById('asset-icon').innerHTML      = cfg.icon;
+      document.getElementById('header-title').innerHTML    = cfg.label;
+      document.getElementById('ticker-badge').textContent  = ticker + ' · Yahoo Finance';
+      document.getElementById('asset-label-unit').innerHTML = cfg.unitLabel;
+      document.getElementById('page-title').textContent    = cfg.label + ' — ' + ticker;
+      document.documentElement.style.setProperty('--asset-accent', cfg.accent);
+      document.querySelectorAll('.asset-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.asset === ticker);
+      });
+      loadData();
+      loadChartData(currentPeriod);
+    }
+  });
+
   // ── Bootstrap ─────────────────────────────────────────────────────────────
   document.addEventListener('DOMContentLoaded', () => {
-    loadData();           // indicators + price (also loads 6M chart inline)
-    loadChartData('6M');  // explicit chart load so period selector works independently
+    // Read ?asset= from URL and apply initial state
+    const params = new URLSearchParams(window.location.search);
+    const assetParam = params.get('asset');
+    if (assetParam && ASSET_REGISTRY[assetParam] && assetParam !== currentAsset) {
+      currentAsset = assetParam;
+      const cfg = ASSET_REGISTRY[assetParam];
+      document.getElementById('asset-icon').innerHTML      = cfg.icon;
+      document.getElementById('header-title').innerHTML    = cfg.label;
+      document.getElementById('ticker-badge').textContent  = assetParam + ' · Yahoo Finance';
+      document.getElementById('asset-label-unit').innerHTML = cfg.unitLabel;
+      document.getElementById('page-title').textContent    = cfg.label + ' — ' + assetParam;
+      document.documentElement.style.setProperty('--asset-accent', cfg.accent);
+      document.querySelectorAll('.asset-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.asset === assetParam);
+      });
+    } else {
+      // Default: apply gold accent
+      document.documentElement.style.setProperty('--asset-accent', ASSET_REGISTRY['GC=F'].accent);
+    }
+
+    loadData();
+    loadChartData(currentPeriod);
   });
 </script>
 </body>
