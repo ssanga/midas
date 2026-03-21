@@ -258,11 +258,46 @@
     /* ── Chart ────────────────────────────────────────────────────────────── */
     .chart-card { padding: 1.25rem 1.25rem 1rem; }
 
+    .chart-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: .75rem;
+      flex-wrap: wrap;
+    }
+
     .chart-title {
       font-size: .82rem;
       font-weight: 600;
       color: var(--muted);
-      margin-bottom: .75rem;
+    }
+
+    /* Period selector */
+    .period-selector {
+      display: flex;
+      gap: .25rem;
+    }
+
+    .period-btn {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: .25rem .55rem;
+      font-size: .75rem;
+      font-weight: 600;
+      color: var(--muted);
+      cursor: pointer;
+      transition: background .12s, color .12s, border-color .12s;
+      letter-spacing: .03em;
+    }
+
+    .period-btn:hover { background: var(--bg-alt); color: var(--text); }
+
+    .period-btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
     }
 
     .chart-wrapper { position: relative; height: 280px; }
@@ -545,14 +580,25 @@
       <div class="metric-value" id="low-30d">—</div>
     </div>
     <div class="card metric-card">
-      <div class="metric-label">Volatilidad 14 días</div>
+      <div class="metric-label">Volatilidad anualizada (14d)</div>
       <div class="metric-value" id="volatility">—</div>
     </div>
   </div>
 
   <!-- Chart -->
   <div class="card chart-card">
-    <div class="chart-title">Precio de cierre — últimas 90 sesiones</div>
+    <div class="chart-header">
+      <div class="chart-title" id="chart-title">Precio de cierre — últimas 90 sesiones</div>
+      <div class="period-selector" id="period-selector">
+        <button class="period-btn" data-period="1D"  onclick="selectPeriod('1D')">1D</button>
+        <button class="period-btn" data-period="5D"  onclick="selectPeriod('5D')">5D</button>
+        <button class="period-btn" data-period="1M"  onclick="selectPeriod('1M')">1M</button>
+        <button class="period-btn active" data-period="6M" onclick="selectPeriod('6M')">6M</button>
+        <button class="period-btn" data-period="1Y"  onclick="selectPeriod('1Y')">1Y</button>
+        <button class="period-btn" data-period="5Y"  onclick="selectPeriod('5Y')">5Y</button>
+        <button class="period-btn" data-period="MAX" onclick="selectPeriod('MAX')">MAX</button>
+      </div>
+    </div>
     <div class="chart-wrapper">
       <canvas id="priceChart"></canvas>
     </div>
@@ -809,18 +855,57 @@
     // Metrics
     document.getElementById('high-30d').textContent  = `$${fmt(d.metrics.high_30d)}`;
     document.getElementById('low-30d').textContent   = `$${fmt(d.metrics.low_30d)}`;
-    document.getElementById('volatility').textContent = `${fmt(d.metrics.volatility_14d, 2)}%`;
+    document.getElementById('volatility').textContent = `${fmt(d.metrics.volatility_ann, 2)}%`;
 
-    // Chart + indicators
-    renderChart(d.chart);
+    // Chart comes from the selected period endpoint; on first load use default (6M)
+    renderChart(d.chart, false);
     renderIndicators(d.indicators);
 
     document.getElementById('updated-at').textContent = `Actualizado: ${d.updated_at}`;
   }
 
+  // ── Period selector ───────────────────────────────────────────────────────
+
+  let currentPeriod = '6M';
+
+  const PERIOD_LABELS = {
+    '1D': 'Precio intradía — hoy (5 min)',
+    '5D': 'Precio — últimos 5 días (1 h)',
+    '1M': 'Precio — último mes',
+    '6M': 'Precio — últimos 6 meses',
+    '1Y': 'Precio — último año',
+    '5Y': 'Precio — últimos 5 años',
+    'MAX': 'Precio — histórico completo',
+  };
+
+  async function selectPeriod(period) {
+    if (period === currentPeriod) return;
+    currentPeriod = period;
+
+    // Update active button
+    document.querySelectorAll('.period-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.period === period);
+    });
+
+    await loadChartData(period);
+  }
+
+  async function loadChartData(period) {
+    document.getElementById('chart-title').textContent = 'Cargando…';
+    try {
+      const res  = await fetch(`/api/chart?period=${period}`);
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || `HTTP ${res.status}`);
+      renderChart(data, data.intraday);
+      document.getElementById('chart-title').textContent = PERIOD_LABELS[period] ?? period;
+    } catch (err) {
+      document.getElementById('chart-title').textContent = `⚠️ Error: ${err.message}`;
+    }
+  }
+
   // ── Chart ─────────────────────────────────────────────────────────────────
 
-  function renderChart(c) {
+  function renderChart(c, intraday) {
     if (chart) { chart.destroy(); chart = null; }
 
     const dark = document.documentElement.getAttribute('data-theme') === 'dark';
@@ -929,7 +1014,10 @@
   }
 
   // ── Bootstrap ─────────────────────────────────────────────────────────────
-  document.addEventListener('DOMContentLoaded', loadData);
+  document.addEventListener('DOMContentLoaded', () => {
+    loadData();           // indicators + price (also loads 6M chart inline)
+    loadChartData('6M');  // explicit chart load so period selector works independently
+  });
 </script>
 </body>
 </html>

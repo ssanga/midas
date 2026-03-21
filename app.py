@@ -1,4 +1,4 @@
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template, jsonify, request
 import yfinance as yf
 import pandas as pd
 import pandas_ta as ta
@@ -182,11 +182,11 @@ def api_data():
         # Context metrics
         last_30       = df["Close"].iloc[-30:]
         returns_14    = df["Close"].pct_change().iloc[-14:]
-        volatility_14 = float(returns_14.std()) * 100   # expressed as %
+        # Annualised volatility: daily σ × √252 (trading days/year)
+        volatility_ann = float(returns_14.std()) * math.sqrt(252) * 100
 
-        # Chart data — last 90 sessions
+        # Chart data — last 90 sessions (default view)
         chart_df = df.tail(90)
-        # strftime handles both timezone-aware and naive DatetimeIndex
         dates  = [str(d)[:10] for d in chart_df.index]
         prices = [safe(v, 2) for v in chart_df["Close"]]
         sma20  = [safe(v, 2) for v in chart_df.get("SMA_20", pd.Series(dtype=float))]
@@ -201,7 +201,7 @@ def api_data():
             "metrics": {
                 "high_30d":       safe(float(last_30.max()), 2),
                 "low_30d":        safe(float(last_30.min()), 2),
-                "volatility_14d": safe(volatility_14, 4),
+                "volatility_ann": safe(volatility_ann, 2),
             },
             "chart": {
                 "dates":  dates,
@@ -213,6 +213,65 @@ def api_data():
             "final_signal": final_signal,
             "indicators":   indicators,
             "updated_at":   pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S"),
+        })
+
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Chart endpoint — independent period selector
+# ─────────────────────────────────────────────────────────────────────────────
+
+# UI label → (yfinance period, yfinance interval, is_intraday)
+_PERIOD_MAP = {
+    "1D":  ("1d",  "5m",  True),
+    "5D":  ("5d",  "1h",  True),
+    "1M":  ("1mo", "1d",  False),
+    "6M":  ("6mo", "1d",  False),
+    "1Y":  ("1y",  "1d",  False),
+    "5Y":  ("5y",  "1wk", False),
+    "MAX": ("max", "1mo", False),
+}
+
+
+@app.route("/api/chart")
+def api_chart():
+    period = request.args.get("period", "6M").upper()
+    yf_period, interval, intraday = _PERIOD_MAP.get(period, ("6mo", "1d", False))
+
+    try:
+        df = yf.download(
+            "GC=F", period=yf_period, interval=interval,
+            progress=False, auto_adjust=True,
+        )
+        if df.empty:
+            return jsonify({"error": "Sin datos para el período solicitado"}), 500
+
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+
+        close = df["Close"].dropna()
+
+        # SMAs only make sense on daily+ data with enough bars
+        sma20_s = ta.sma(close, length=20) if not intraday else None
+        sma50_s = ta.sma(close, length=50) if not intraday else None
+
+        # Date formatting: include time for intraday bars
+        if intraday:
+            fmt_dates = [str(d)[:16].replace("T", " ") for d in close.index]
+        else:
+            fmt_dates = [str(d)[:10] for d in close.index]
+
+        none_list = [None] * len(close)
+
+        return jsonify({
+            "period":   period,
+            "intraday": intraday,
+            "dates":    fmt_dates,
+            "prices":   [safe(v, 2) for v in close],
+            "sma20":    [safe(v, 2) for v in sma20_s] if sma20_s is not None else none_list,
+            "sma50":    [safe(v, 2) for v in sma50_s] if sma50_s is not None else none_list,
         })
 
     except Exception as exc:
