@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Análisis del Oro — GC=F</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── Tokens: light ───────────────────────────────────────────────────── */
+    :root {
+      --bg:          #f0f4f8;
+      --bg-alt:      #e8eef5;
+      --card:        #ffffff;
+      --border:      #e2e8f0;
+      --text:        #1e293b;
+      --text-inv:    #f8fafc;
+      --muted:       #64748b;
+      --buy:         #16a34a;
+      --buy-bg:      #dcfce7;
+      --sell:        #dc2626;
+      --sell-bg:     #fee2e2;
+      --hold:        #d97706;
+      --hold-bg:     #fef3c7;
+      --accent:      #6366f1;
+      --accent-muted:#818cf8;
+      --shadow:      0 1px 4px rgba(0,0,0,.08), 0 4px 12px rgba(0,0,0,.06);
+      --overlay:     rgba(15,23,42,.45);
+      --skeleton-a:  #e2e8f0;
+      --skeleton-b:  #f1f5f9;
+    }
+
+    /* ── Tokens: dark ────────────────────────────────────────────────────── */
+    [data-theme="dark"] {
+      --bg:          #0f172a;
+      --bg-alt:      #1e293b;
+      --card:        #1e293b;
+      --border:      #334155;
+      --text:        #f1f5f9;
+      --text-inv:    #1e293b;
+      --muted:       #94a3b8;
+      --buy:         #4ade80;
+      --buy-bg:      #14532d;
+      --sell:        #f87171;
+      --sell-bg:     #7f1d1d;
+      --hold:        #fbbf24;
+      --hold-bg:     #78350f;
+      --accent:      #818cf8;
+      --accent-muted:#6366f1;
+      --shadow:      0 1px 4px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.25);
+      --overlay:     rgba(0,0,0,.65);
+      --skeleton-a:  #334155;
+      --skeleton-b:  #475569;
+    }
+
+    /* ── Base ────────────────────────────────────────────────────────────── */
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      transition: background .2s, color .2s;
+    }
+
+    /* ── Header ──────────────────────────────────────────────────────────── */
+    header {
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      padding: .85rem 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      flex-wrap: wrap;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      transition: background .2s, border-color .2s;
+    }
+
+    header h1 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+    }
+
+    header h1 span.ticker {
+      font-size: .8rem;
+      font-weight: 500;
+      color: var(--muted);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: .15rem .5rem;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+      flex-wrap: wrap;
+    }
+
+    #updated-at {
+      font-size: .78rem;
+      color: var(--muted);
+    }
+
+    /* ── Icon buttons (dark toggle + help) ───────────────────────────────── */
+    .icon-btn {
+      background: var(--bg-alt);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: .45rem .55rem;
+      cursor: pointer;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background .15s, color .15s, transform .1s;
+      line-height: 0;
+    }
+
+    .icon-btn:hover { background: var(--border); color: var(--text); }
+    .icon-btn:active { transform: scale(.93); }
+
+    /* ── Refresh button ───────────────────────────────────────────────────── */
+    #refresh-btn {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: .45rem 1rem;
+      font-size: .85rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: opacity .15s, transform .1s;
+      display: flex;
+      align-items: center;
+      gap: .4rem;
+    }
+
+    #refresh-btn:hover:not(:disabled) { opacity: .88; }
+    #refresh-btn:active:not(:disabled) { transform: scale(.97); }
+    #refresh-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+    /* ── Main layout ──────────────────────────────────────────────────────── */
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 1.5rem 1.25rem 3rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    /* ── Card ─────────────────────────────────────────────────────────────── */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+      padding: 1.25rem 1.5rem;
+      transition: background .2s, border-color .2s;
+    }
+
+    /* ── Error bar ────────────────────────────────────────────────────────── */
+    #error-bar {
+      display: none;
+      background: var(--sell-bg);
+      border: 1px solid var(--sell);
+      border-radius: 10px;
+      padding: .75rem 1rem;
+      color: var(--sell);
+      font-size: .875rem;
+      font-weight: 500;
+    }
+
+    /* ── Price + Signal ───────────────────────────────────────────────────── */
+    .price-signal-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 1.25rem;
+      align-items: center;
+    }
+
+    .price-label {
+      font-size: .78rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--muted);
+      margin-bottom: .3rem;
+    }
+
+    #current-price {
+      font-size: 2.6rem;
+      font-weight: 800;
+      letter-spacing: -.025em;
+      line-height: 1;
+    }
+
+    #day-change {
+      display: inline-block;
+      margin-top: .45rem;
+      font-size: .9rem;
+      font-weight: 600;
+      border-radius: 6px;
+      padding: .2rem .55rem;
+    }
+
+    #day-change.positive { color: var(--buy);  background: var(--buy-bg);  }
+    #day-change.negative { color: var(--sell); background: var(--sell-bg); }
+    #day-change.neutral  { color: var(--hold); background: var(--hold-bg); }
+
+    /* ── Signal banner ────────────────────────────────────────────────────── */
+    #signal-banner {
+      font-size: 1.6rem;
+      font-weight: 900;
+      letter-spacing: .08em;
+      text-align: center;
+      padding: 1rem 2rem;
+      border-radius: 12px;
+      min-width: 185px;
+      transition: background .3s, color .3s, border-color .3s;
+    }
+
+    #signal-banner.signal-comprar  { background: var(--buy-bg);  color: var(--buy);  border: 2px solid var(--buy);  }
+    #signal-banner.signal-vender   { background: var(--sell-bg); color: var(--sell); border: 2px solid var(--sell); }
+    #signal-banner.signal-mantener { background: var(--hold-bg); color: var(--hold); border: 2px solid var(--hold); }
+    #signal-banner.signal-loading  { background: var(--bg-alt);  color: var(--muted); border: 2px solid var(--border); font-size: 1rem; }
+
+    .signal-score { font-size: .72rem; font-weight: 500; margin-top: .3rem; opacity: .75; }
+
+    /* ── Metrics ──────────────────────────────────────────────────────────── */
+    .metrics-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+    }
+
+    .metric-card { text-align: center; }
+
+    .metric-label {
+      font-size: .74rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--muted);
+      margin-bottom: .45rem;
+    }
+
+    .metric-value { font-size: 1.3rem; font-weight: 700; }
+
+    /* ── Chart ────────────────────────────────────────────────────────────── */
+    .chart-card { padding: 1.25rem 1.25rem 1rem; }
+
+    .chart-title {
+      font-size: .82rem;
+      font-weight: 600;
+      color: var(--muted);
+      margin-bottom: .75rem;
+    }
+
+    .chart-wrapper { position: relative; height: 280px; }
+
+    /* ── Indicator cards ──────────────────────────────────────────────────── */
+    .indicators-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1rem;
+    }
+
+    .ind-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: .75rem;
+      gap: .5rem;
+    }
+
+    .ind-title {
+      font-size: .82rem;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .05em;
+    }
+
+    .badge {
+      font-size: .68rem;
+      font-weight: 700;
+      letter-spacing: .04em;
+      padding: .2rem .55rem;
+      border-radius: 20px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .badge-buy  { background: var(--buy-bg);  color: var(--buy);  }
+    .badge-sell { background: var(--sell-bg); color: var(--sell); }
+    .badge-hold { background: var(--hold-bg); color: var(--hold); }
+
+    .ind-value  { font-size: 1.45rem; font-weight: 700; line-height: 1.1; margin-bottom: .2rem; }
+    .ind-sub    { font-size: .78rem; color: var(--muted); margin-bottom: .55rem; }
+    .ind-text   { font-size: .8rem; color: var(--muted); line-height: 1.55; border-top: 1px solid var(--border); padding-top: .6rem; margin-top: .6rem; }
+
+    /* ── Skeleton ─────────────────────────────────────────────────────────── */
+    @keyframes shimmer {
+      0%   { background-position: -600px 0; }
+      100% { background-position:  600px 0; }
+    }
+
+    .skeleton {
+      background: linear-gradient(90deg, var(--skeleton-a) 25%, var(--skeleton-b) 50%, var(--skeleton-a) 75%);
+      background-size: 600px 100%;
+      animation: shimmer 1.4s infinite;
+      border-radius: 6px;
+      color: transparent !important;
+      user-select: none;
+    }
+
+    /* ── Modal overlay ────────────────────────────────────────────────────── */
+    #help-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: var(--overlay);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+      backdrop-filter: blur(3px);
+    }
+
+    #help-modal.open { display: flex; }
+
+    .modal-box {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0,0,0,.25);
+      width: 100%;
+      max-width: 620px;
+      max-height: 88vh;
+      overflow-y: auto;
+      animation: modal-in .18s ease;
+    }
+
+    @keyframes modal-in {
+      from { opacity: 0; transform: translateY(16px) scale(.97); }
+      to   { opacity: 1; transform: translateY(0)    scale(1);   }
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1.25rem 1.5rem 1rem;
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      background: var(--card);
+      border-radius: 16px 16px 0 0;
+    }
+
+    .modal-header h2 { font-size: 1.05rem; font-weight: 700; }
+
+    .modal-close {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--muted);
+      padding: .25rem;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      transition: color .15s, background .15s;
+    }
+
+    .modal-close:hover { background: var(--bg-alt); color: var(--text); }
+
+    .modal-body { padding: 1.25rem 1.5rem 1.5rem; display: flex; flex-direction: column; gap: 1.25rem; }
+
+    .help-item-header {
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+      margin-bottom: .5rem;
+    }
+
+    .help-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .help-item h3 { font-size: .95rem; font-weight: 700; }
+
+    .help-item p { font-size: .84rem; color: var(--muted); line-height: 1.6; margin-bottom: .5rem; }
+    .help-item p:last-child { margin-bottom: 0; }
+
+    .help-rules {
+      display: flex;
+      flex-direction: column;
+      gap: .3rem;
+      font-size: .8rem;
+    }
+
+    .help-rule {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      padding: .35rem .6rem;
+      border-radius: 7px;
+      background: var(--bg-alt);
+    }
+
+    .help-rule .dot-buy  { color: var(--buy);  font-weight: 700; }
+    .help-rule .dot-sell { color: var(--sell); font-weight: 700; }
+    .help-rule .dot-hold { color: var(--hold); font-weight: 700; }
+
+    .modal-divider { border: none; border-top: 1px solid var(--border); }
+
+    /* ── Scoring legend at the bottom of the modal ───────────────────────── */
+    .scoring-box {
+      background: var(--bg-alt);
+      border-radius: 10px;
+      padding: 1rem 1.25rem;
+    }
+
+    .scoring-box h3 { font-size: .88rem; font-weight: 700; margin-bottom: .65rem; }
+
+    .scoring-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: .82rem;
+      padding: .25rem 0;
+      border-bottom: 1px solid var(--border);
+      color: var(--muted);
+    }
+
+    .scoring-row:last-child { border-bottom: none; }
+    .scoring-row strong { font-weight: 700; color: var(--text); }
+
+    /* ── Responsive ───────────────────────────────────────────────────────── */
+    @media (max-width: 640px) {
+      .price-signal-row  { grid-template-columns: 1fr; }
+      #signal-banner     { min-width: unset; }
+      .metrics-row       { grid-template-columns: 1fr; }
+      .indicators-grid   { grid-template-columns: 1fr; }
+      #current-price     { font-size: 2rem; }
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ───────────────────────────────────────────────────────────── -->
+<header>
+  <h1>
+    ⚡ Análisis del Oro
+    <span class="ticker">GC=F · Yahoo Finance</span>
+  </h1>
+  <div class="header-right">
+    <span id="updated-at">—</span>
+
+    <!-- Help button -->
+    <button class="icon-btn" id="help-btn" title="Ayuda — descripción de indicadores" onclick="openHelp()">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/>
+        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+        <line x1="12" y1="17" x2="12.01" y2="17"/>
+      </svg>
+    </button>
+
+    <!-- Dark mode toggle -->
+    <button class="icon-btn" id="theme-btn" title="Alternar modo oscuro" onclick="toggleTheme()">
+      <!-- Moon icon (shown in light mode) -->
+      <svg id="icon-moon" width="17" height="17" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+      </svg>
+      <!-- Sun icon (shown in dark mode, hidden by default) -->
+      <svg id="icon-sun" width="17" height="17" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"
+           style="display:none">
+        <circle cx="12" cy="12" r="5"/>
+        <line x1="12" y1="1"  x2="12" y2="3"/>
+        <line x1="12" y1="21" x2="12" y2="23"/>
+        <line x1="4.22" y1="4.22"   x2="5.64"  y2="5.64"/>
+        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+        <line x1="1"  y1="12" x2="3"  y2="12"/>
+        <line x1="21" y1="12" x2="23" y2="12"/>
+        <line x1="4.22"  y1="19.78" x2="5.64"  y2="18.36"/>
+        <line x1="18.36" y1="5.64"  x2="19.78" y2="4.22"/>
+      </svg>
+    </button>
+
+    <!-- Refresh button -->
+    <button id="refresh-btn" onclick="loadData()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 12a9 9 0 0 1-15 6.7L3 16"/>
+        <polyline points="21 3 21 9 15 9"/><polyline points="3 21 3 15 9 15"/>
+      </svg>
+      Actualizar datos
+    </button>
+  </div>
+</header>
+
+<!-- ── Main ─────────────────────────────────────────────────────────────── -->
+<main>
+
+  <div id="error-bar"></div>
+
+  <!-- Price + Signal -->
+  <div class="card price-signal-row">
+    <div class="price-block">
+      <div class="price-label">Precio actual — Oro (USD/oz)</div>
+      <div id="current-price" class="skeleton">$0,000.00</div>
+      <span id="day-change" class="neutral skeleton">+0.00 (+0.00%)</span>
+    </div>
+    <div id="signal-banner" class="signal-loading">
+      Cargando…
+      <div class="signal-score" id="signal-score"></div>
+    </div>
+  </div>
+
+  <!-- Metrics -->
+  <div class="metrics-row">
+    <div class="card metric-card">
+      <div class="metric-label">Máximo 30 días</div>
+      <div class="metric-value" id="high-30d">—</div>
+    </div>
+    <div class="card metric-card">
+      <div class="metric-label">Mínimo 30 días</div>
+      <div class="metric-value" id="low-30d">—</div>
+    </div>
+    <div class="card metric-card">
+      <div class="metric-label">Volatilidad 14 días</div>
+      <div class="metric-value" id="volatility">—</div>
+    </div>
+  </div>
+
+  <!-- Chart -->
+  <div class="card chart-card">
+    <div class="chart-title">Precio de cierre — últimas 90 sesiones</div>
+    <div class="chart-wrapper">
+      <canvas id="priceChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Indicator cards -->
+  <div class="indicators-grid">
+    <div class="card ind-card" id="card-rsi">
+      <div class="ind-header">
+        <span class="ind-title">RSI (14)</span>
+        <span class="badge badge-hold skeleton">MANTENER</span>
+      </div>
+      <div class="ind-value skeleton">—</div>
+    </div>
+    <div class="card ind-card" id="card-macd">
+      <div class="ind-header">
+        <span class="ind-title">MACD (12,26,9)</span>
+        <span class="badge badge-hold skeleton">MANTENER</span>
+      </div>
+      <div class="ind-value skeleton">—</div>
+    </div>
+    <div class="card ind-card" id="card-bollinger">
+      <div class="ind-header">
+        <span class="ind-title">Bollinger (20, 2σ)</span>
+        <span class="badge badge-hold skeleton">MANTENER</span>
+      </div>
+      <div class="ind-value skeleton">—</div>
+    </div>
+    <div class="card ind-card" id="card-sma">
+      <div class="ind-header">
+        <span class="ind-title">SMA 20 / SMA 50</span>
+        <span class="badge badge-hold skeleton">MANTENER</span>
+      </div>
+      <div class="ind-value skeleton">—</div>
+    </div>
+  </div>
+
+</main>
+
+<!-- ── Help modal ────────────────────────────────────────────────────────── -->
+<div id="help-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"
+     onclick="handleOverlayClick(event)">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h2 id="modal-title">Guía de indicadores</h2>
+      <button class="modal-close" onclick="closeHelp()" title="Cerrar">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+
+      <!-- RSI -->
+      <div class="help-item">
+        <div class="help-item-header">
+          <span class="help-dot" style="background:#6366f1"></span>
+          <h3>RSI — Índice de Fuerza Relativa (14)</h3>
+        </div>
+        <p>Oscilador de momentum que mide la velocidad y magnitud de los movimientos de precio en una escala de <strong>0 a 100</strong>. Desarrollado por J. Welles Wilder (1978).</p>
+        <p>Un RSI alto indica que el activo podría estar sobrecomprado (subida excesiva); uno bajo indica sobreventa (caída excesiva).</p>
+        <div class="help-rules">
+          <div class="help-rule"><span class="dot-buy">▲ COMPRAR (+1)</span> — RSI &lt; 35: zona de sobreventa, posible rebote alcista.</div>
+          <div class="help-rule"><span class="dot-sell">▼ VENDER (−1)</span> — RSI &gt; 65: zona de sobrecompra, posible corrección.</div>
+          <div class="help-rule"><span class="dot-hold">● MANTENER (0)</span> — RSI entre 35 y 65: zona neutral sin señal extrema.</div>
+        </div>
+      </div>
+
+      <hr class="modal-divider"/>
+
+      <!-- MACD -->
+      <div class="help-item">
+        <div class="help-item-header">
+          <span class="help-dot" style="background:#f59e0b"></span>
+          <h3>MACD — Convergencia/Divergencia de Medias (12, 26, 9)</h3>
+        </div>
+        <p>Indicador de tendencia y momentum que calcula la diferencia entre la <strong>EMA de 12</strong> y la <strong>EMA de 26</strong> períodos. La <em>línea de señal</em> es una EMA de 9 sobre el MACD.</p>
+        <p>Cuando la línea MACD cruza por encima de la señal se produce un <em>golden cross</em> (señal alcista); cuando la cruza por debajo, un <em>death cross</em> (señal bajista).</p>
+        <div class="help-rules">
+          <div class="help-rule"><span class="dot-buy">▲ COMPRAR (+1)</span> — Línea MACD &gt; línea de señal: momentum alcista activo.</div>
+          <div class="help-rule"><span class="dot-sell">▼ VENDER (−1)</span> — Línea MACD &lt; línea de señal: momentum bajista activo.</div>
+        </div>
+      </div>
+
+      <hr class="modal-divider"/>
+
+      <!-- Bollinger -->
+      <div class="help-item">
+        <div class="help-item-header">
+          <span class="help-dot" style="background:#ec4899"></span>
+          <h3>Bandas de Bollinger (20 períodos, 2σ)</h3>
+        </div>
+        <p>Canal dinámico formado por la <strong>SMA de 20</strong> (banda media) ± <strong>2 desviaciones estándar</strong>. Creado por John Bollinger. En condiciones normales, el ~95 % del precio queda dentro de las bandas.</p>
+        <p>Las bandas se expanden en momentos de alta volatilidad y se contraen en mercados tranquilos. Un precio que toca o rompe una banda es estadísticamente inusual.</p>
+        <div class="help-rules">
+          <div class="help-rule"><span class="dot-buy">▲ COMPRAR (+1)</span> — Precio &lt; banda inferior: precio estadísticamente bajo, posible rebote.</div>
+          <div class="help-rule"><span class="dot-sell">▼ VENDER (−1)</span> — Precio &gt; banda superior: precio estadísticamente alto, posible corrección.</div>
+          <div class="help-rule"><span class="dot-hold">● MANTENER (0)</span> — Precio dentro de las bandas: comportamiento normal.</div>
+        </div>
+      </div>
+
+      <hr class="modal-divider"/>
+
+      <!-- SMA Cross -->
+      <div class="help-item">
+        <div class="help-item-header">
+          <span class="help-dot" style="background:#14b8a6"></span>
+          <h3>Cruce de Medias Móviles — SMA20 / SMA50</h3>
+        </div>
+        <p>Compara dos <strong>medias móviles simples</strong> de distintos períodos para identificar la dirección de la tendencia de medio plazo. La SMA20 reacciona más rápido que la SMA50 a los cambios de precio.</p>
+        <p>Cuando la media rápida supera a la lenta se llama <em>golden cross</em> (tendencia alcista); cuando la media rápida cae por debajo, <em>death cross</em> (tendencia bajista).</p>
+        <div class="help-rules">
+          <div class="help-rule"><span class="dot-buy">▲ COMPRAR (+1)</span> — SMA20 &gt; SMA50: tendencia alcista de medio plazo confirmada.</div>
+          <div class="help-rule"><span class="dot-sell">▼ VENDER (−1)</span> — SMA20 &lt; SMA50: tendencia bajista de medio plazo confirmada.</div>
+        </div>
+      </div>
+
+      <hr class="modal-divider"/>
+
+      <!-- Scoring -->
+      <div class="scoring-box">
+        <h3>Sistema de scoring</h3>
+        <div class="scoring-row">
+          <span>Cada indicador aporta</span>
+          <strong>+1, 0 o −1</strong>
+        </div>
+        <div class="scoring-row">
+          <span>Score total posible</span>
+          <strong>−4 a +4</strong>
+        </div>
+        <div class="scoring-row">
+          <span>Score ≥ +2</span>
+          <strong style="color:var(--buy)">COMPRAR</strong>
+        </div>
+        <div class="scoring-row">
+          <span>Score −1, 0, +1</span>
+          <strong style="color:var(--hold)">MANTENER</strong>
+        </div>
+        <div class="scoring-row">
+          <span>Score ≤ −2</span>
+          <strong style="color:var(--sell)">VENDER</strong>
+        </div>
+      </div>
+
+    </div><!-- /modal-body -->
+  </div><!-- /modal-box -->
+</div><!-- /help-modal -->
+
+<!-- ── JavaScript ─────────────────────────────────────────────────────────── -->
+<script>
+  let chart = null;
+
+  // ── Theme ─────────────────────────────────────────────────────────────────
+
+  function applyTheme(dark) {
+    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+    document.getElementById('icon-moon').style.display = dark ? 'none'  : '';
+    document.getElementById('icon-sun').style.display  = dark ? ''      : 'none';
+    // Re-render chart with new grid colours if data already loaded
+    if (chart) updateChartTheme();
+  }
+
+  function toggleTheme() {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const next = !isDark;
+    localStorage.setItem('theme', next ? 'dark' : 'light');
+    applyTheme(next);
+  }
+
+  function updateChartTheme() {
+    const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const grid = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)';
+    const tick = dark ? '#94a3b8' : '#64748b';
+    chart.options.scales.x.grid.color = grid;
+    chart.options.scales.y.grid.color = grid;
+    chart.options.scales.x.ticks.color = tick;
+    chart.options.scales.y.ticks.color = tick;
+    chart.options.plugins.legend.labels.color = tick;
+    chart.update('none');
+  }
+
+  // Restore saved theme on load
+  (function () {
+    const saved = localStorage.getItem('theme');
+    applyTheme(saved === 'dark');
+  })();
+
+  // ── Help modal ────────────────────────────────────────────────────────────
+
+  function openHelp()  { document.getElementById('help-modal').classList.add('open');    document.body.style.overflow = 'hidden'; }
+  function closeHelp() { document.getElementById('help-modal').classList.remove('open'); document.body.style.overflow = ''; }
+
+  function handleOverlayClick(e) {
+    if (e.target === document.getElementById('help-modal')) closeHelp();
+  }
+
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeHelp(); });
+
+  // ── Utility ───────────────────────────────────────────────────────────────
+
+  function fmt(val, decimals = 2) {
+    if (val === null || val === undefined) return '—';
+    return val.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  }
+
+  function signalClass(signal) {
+    return { COMPRAR: 'buy', VENDER: 'sell', MANTENER: 'hold' }[signal] ?? 'hold';
+  }
+
+  // ── Data loading ──────────────────────────────────────────────────────────
+
+  async function loadData() {
+    const btn = document.getElementById('refresh-btn');
+    btn.disabled = true;
+    btn.querySelector('svg').style.animation = 'spin 1s linear infinite';
+    document.getElementById('error-bar').style.display = 'none';
+
+    try {
+      const res  = await fetch('/api/data');
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || `HTTP ${res.status}`);
+      render(data);
+    } catch (err) {
+      const bar = document.getElementById('error-bar');
+      bar.textContent = `⚠️ Error al obtener datos: ${err.message}`;
+      bar.style.display = 'block';
+    } finally {
+      btn.disabled = false;
+      btn.querySelector('svg').style.animation = '';
+    }
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────
+
+  function render(d) {
+    // Price
+    const priceEl = document.getElementById('current-price');
+    priceEl.textContent = `$${fmt(d.current_price, 2)}`;
+    priceEl.classList.remove('skeleton');
+
+    // Day change
+    const changeEl = document.getElementById('day-change');
+    const isPos = d.day_change >= 0;
+    changeEl.textContent = `${isPos ? '+' : ''}${fmt(d.day_change, 2)} (${isPos ? '+' : ''}${fmt(d.day_change_pct, 2)}%)`;
+    changeEl.className = isPos ? 'positive' : 'negative';
+
+    // Signal banner
+    const banner = document.getElementById('signal-banner');
+    const sig = d.final_signal;
+    banner.innerHTML = sig + `<div class="signal-score">Score: ${d.score} / 4</div>`;
+    banner.className = `signal-banner signal-${sig.toLowerCase()}`;
+
+    // Metrics
+    document.getElementById('high-30d').textContent  = `$${fmt(d.metrics.high_30d)}`;
+    document.getElementById('low-30d').textContent   = `$${fmt(d.metrics.low_30d)}`;
+    document.getElementById('volatility').textContent = `${fmt(d.metrics.volatility_14d, 2)}%`;
+
+    // Chart + indicators
+    renderChart(d.chart);
+    renderIndicators(d.indicators);
+
+    document.getElementById('updated-at').textContent = `Actualizado: ${d.updated_at}`;
+  }
+
+  // ── Chart ─────────────────────────────────────────────────────────────────
+
+  function renderChart(c) {
+    if (chart) { chart.destroy(); chart = null; }
+
+    const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const grid = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)';
+    const tick = dark ? '#94a3b8' : '#64748b';
+
+    chart = new Chart(document.getElementById('priceChart').getContext('2d'), {
+      type: 'line',
+      data: {
+        labels: c.dates,
+        datasets: [
+          {
+            label: 'Precio',
+            data: c.prices,
+            borderColor: '#6366f1',
+            backgroundColor: 'rgba(99,102,241,0.07)',
+            borderWidth: 2, pointRadius: 0, fill: true, tension: 0.15, order: 0,
+          },
+          {
+            label: 'SMA 20',
+            data: c.sma20,
+            borderColor: '#f59e0b',
+            borderWidth: 1.75, pointRadius: 0, fill: false, tension: 0.15, spanGaps: true, order: 1,
+          },
+          {
+            label: 'SMA 50',
+            data: c.sma50,
+            borderColor: '#ec4899',
+            borderWidth: 1.75, pointRadius: 0, fill: false, tension: 0.15, spanGaps: true, order: 2,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: {
+            position: 'top',
+            labels: { boxWidth: 12, font: { size: 12 }, color: tick },
+          },
+          tooltip: {
+            callbacks: {
+              label: ctx => ctx.raw !== null ? `${ctx.dataset.label}: $${fmt(ctx.raw, 2)}` : null,
+            },
+          },
+        },
+        scales: {
+          x: {
+            grid: { color: grid },
+            ticks: { maxTicksLimit: 9, font: { size: 11 }, maxRotation: 0, color: tick },
+          },
+          y: {
+            grid: { color: grid },
+            ticks: { callback: v => `$${v.toLocaleString('en-US')}`, font: { size: 11 }, color: tick },
+          },
+        },
+      },
+    });
+  }
+
+  // ── Indicator cards ───────────────────────────────────────────────────────
+
+  function renderIndicators(ind) {
+    setCard('rsi', {
+      title: 'RSI (14)',
+      value: ind.rsi.value !== null ? fmt(ind.rsi.value, 2) : '—',
+      sub:   null,
+      text:  ind.rsi.text,
+      signal: ind.rsi.signal,
+    });
+    setCard('macd', {
+      title: 'MACD (12,26,9)',
+      value: ind.macd.line !== null ? fmt(ind.macd.line, 4) : '—',
+      sub:   `Señal: ${ind.macd.signal_line !== null ? fmt(ind.macd.signal_line, 4) : '—'}`,
+      text:  ind.macd.text,
+      signal: ind.macd.signal,
+    });
+    setCard('bollinger', {
+      title: 'Bollinger (20, 2σ)',
+      value: ind.bollinger.lower !== null ? `$${fmt(ind.bollinger.lower)}` : '—',
+      sub:   `Inf: $${fmt(ind.bollinger.lower)} · Med: $${fmt(ind.bollinger.mid)} · Sup: $${fmt(ind.bollinger.upper)}`,
+      text:  ind.bollinger.text,
+      signal: ind.bollinger.signal,
+    });
+    setCard('sma', {
+      title: 'SMA 20 / SMA 50',
+      value: ind.sma.sma20 !== null ? `$${fmt(ind.sma.sma20)}` : '—',
+      sub:   `SMA 50: ${ind.sma.sma50 !== null ? '$' + fmt(ind.sma.sma50) : '—'}`,
+      text:  ind.sma.text,
+      signal: ind.sma.signal,
+    });
+  }
+
+  function setCard(id, { title, value, sub, text, signal }) {
+    const cls = signalClass(signal);
+    document.getElementById(`card-${id}`).innerHTML = `
+      <div class="ind-header">
+        <span class="ind-title">${title}</span>
+        <span class="badge badge-${cls}">${signal}</span>
+      </div>
+      <div class="ind-value">${value}</div>
+      ${sub ? `<div class="ind-sub">${sub}</div>` : ''}
+      <div class="ind-text">${text}</div>
+    `;
+  }
+
+  // ── Bootstrap ─────────────────────────────────────────────────────────────
+  document.addEventListener('DOMContentLoaded', loadData);
+</script>
+</body>
+</html>
