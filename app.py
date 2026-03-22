@@ -4,8 +4,34 @@ import pandas as pd
 import pandas_ta as ta
 import numpy as np
 import math
+import time
 
 app = Flask(__name__)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Global JSON error handler — ensures API routes never return HTML on crash
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    return jsonify({"error": str(e)}), 500
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Simple TTL cache — avoids hammering yfinance on every request
+# ─────────────────────────────────────────────────────────────────────────────
+
+_CACHE: dict = {}
+_CACHE_TTL = 900  # 15 minutes
+
+
+def _cached_fetch(ticker: str) -> pd.DataFrame:
+    now = time.time()
+    entry = _CACHE.get(ticker)
+    if entry and (now - entry["ts"]) < _CACHE_TTL:
+        return entry["df"]
+    df = fetch_data(ticker)
+    _CACHE[ticker] = {"df": df, "ts": now}
+    return df
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -175,7 +201,7 @@ def api_data():
         return jsonify({"error": f"Activo no soportado: {ticker}"}), 400
 
     try:
-        df = fetch_data(ticker)
+        df = _cached_fetch(ticker)
 
         latest      = df.iloc[-1]
         prev_close  = float(df.iloc[-2]["Close"]) if len(df) >= 2 else float(latest["Close"])
@@ -257,21 +283,29 @@ def api_chart():
     yf_period, interval, intraday = _PERIOD_MAP.get(period, ("6mo", "1d", False))
 
     try:
-        df = yf.download(
-            ticker, period=yf_period, interval=interval,
-            progress=False, auto_adjust=True,
-        )
+        # For daily 6M period, reuse the cache instead of a second download
+        if period == "6M" and not intraday:
+            raw = _cached_fetch(ticker)
+            df = raw[["Close"]].copy()
+            sma20_s = raw.get("SMA_20")
+            sma50_s = raw.get("SMA_50")
+        else:
+            df = yf.download(
+                ticker, period=yf_period, interval=interval,
+                progress=False, auto_adjust=True,
+            )
+            if df.empty:
+                return jsonify({"error": "Sin datos para el período solicitado"}), 500
+
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = df.columns.get_level_values(0)
+            sma20_s = ta.sma(df["Close"].dropna(), length=20) if not intraday else None
+            sma50_s = ta.sma(df["Close"].dropna(), length=50) if not intraday else None
+
         if df.empty:
             return jsonify({"error": "Sin datos para el período solicitado"}), 500
 
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
-
         close = df["Close"].dropna()
-
-        # SMAs only make sense on daily+ data with enough bars
-        sma20_s = ta.sma(close, length=20) if not intraday else None
-        sma50_s = ta.sma(close, length=50) if not intraday else None
 
         # Date formatting: include time for intraday bars
         if intraday:

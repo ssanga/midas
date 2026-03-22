@@ -9,12 +9,21 @@ import pandas as pd
 import pandas_ta as ta
 from unittest.mock import patch
 
+import app as app_module
 from app import app as flask_app, safe, compute_signals
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Fixtures
 # ─────────────────────────────────────────────────────────────────────────────
+
+@pytest.fixture(autouse=True)
+def clear_cache():
+    """Clear the in-memory TTL cache before every test for isolation."""
+    app_module._CACHE.clear()
+    yield
+    app_module._CACHE.clear()
+
 
 @pytest.fixture
 def client():
@@ -415,6 +424,7 @@ class TestApiChartMultiAsset:
         assert "error" in res.get_json()
 
     def test_yf_download_called_with_ticker(self, client):
+        # Use 1M (not 6M) — the 6M path reuses the data cache, not yf.download directly
         with patch("app.yf.download", return_value=make_mock_df()) as mock_dl:
-            client.get("/api/chart?period=6M&asset=BTC-USD")
+            client.get("/api/chart?period=1M&asset=BTC-USD")
         assert mock_dl.call_args[0][0] == "BTC-USD"

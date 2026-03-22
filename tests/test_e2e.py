@@ -304,14 +304,12 @@ def test_url_asset_param_sets_active_button(page: Page, base_url: str) -> None:
 
 def test_no_page_reload_on_asset_switch(page: Page, base_url: str) -> None:
     page.goto(base_url)
-    # Track navigations — a full reload would trigger a framenavigated event for the main URL
-    navigations: list[str] = []
-    page.on("framenavigated", lambda frame: navigations.append(frame.url) if frame == page.main_frame else None)
+    # Inject a marker into the JS heap — survives pushState but is wiped by a full reload
+    page.evaluate("window.__noReload = true")
     page.click('.asset-btn[data-asset="BTC-USD"]')
     page.wait_for_timeout(500)
-    # No full navigation should have occurred (pushState keeps the same frame)
-    assert not any("BTC-USD" in url and url.startswith("http") for url in navigations), \
-        "Asset switch should not trigger a full page navigation"
+    marker = page.evaluate("window.__noReload")
+    assert marker is True, "Asset switch should not trigger a full page navigation (reload detected)"
 
 
 @pytest.mark.slow
